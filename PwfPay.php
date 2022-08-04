@@ -2,7 +2,7 @@
 
 namespace App\Payments;
 
-use Pwf\PaySDK\Base\ApiClient;
+use Pwf\PaySDK\Base\PwfClient;
 use Pwf\PaySDK\Base\Config;
 
 class PwfPay {
@@ -57,14 +57,13 @@ class PwfPay {
         
         $options->merchantPrivateCertPath = $this->config['pwfpay_private_key'];
         $options->pwfPublicCertPath = $this->config['pwfpay_public_key'];
-        
-        $options->notifyUrl = "";
+ 
         return $options;
     }
     
     public function pay($order)
     {
-        ApiClient::setOptions($this->_getOptions());
+        $pwfClient = new PwfClient($this->_getOptions());
 
         try{
             $params = [
@@ -80,7 +79,7 @@ class PwfPay {
                 "user_id" => $order['user_id']
             ];
             
-            $ret = ApiClient::wallet()->payAddress($params);
+            $ret = $pwfClient->payAddress($params);
             
             return [
                 'type' => 1, // Redirect to url
