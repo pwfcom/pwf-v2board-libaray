@@ -52,7 +52,7 @@ class PwfPay {
         
         $options->apiUrl = $this->config['pwfpay_app_url'];
         $options->appToken = $this->config['pwfpay_app_token'];
-        $options->merchantNo = $this->config['pwfpay_merchant_no'];
+
         $options->lang = "CN";
         
         $options->merchantPrivateCertPath = $this->config['pwfpay_private_key'];
@@ -76,15 +76,28 @@ class PwfPay {
                 "return_url" => $order['return_url'],
                 "notify_url" => $order['notify_url'],
                 "collection_model" => 1,
-                "user_id" => $order['user_id']
+                "user_id" => $order['user_id'],
+                "merchant_no" => $this->config['pwfpay_merchant_no']
             ];
             
-            $ret = $pwfClient->payAddress($params);
-            
-            return [
-                'type' => 1, // Redirect to url
-                'data' => $ret->pay_url,
-            ];
+            $ret = $pwfClient->execute("/api/v2/wallet/payAddress",$params);
+            if($ret->isSuccess()){
+
+                if($ret->verify()){
+
+                    $data = $ret->dataMap();
+                    return [
+                        'type' => 1, // Redirect to url
+                        'data' => $data['pay_url'],
+                    ];
+                }else{
+                    throw new \Exception("驗簽失敗，請檢查Pwf平台公鑰或商戶私鑰是否配置正確。");
+                }
+                
+            }else{
+                throw new \Exception($result->ret() .":".$result->msg());
+            }
+
         }catch (\Exception $e){
             abort(500, $e->getMessage());
         }
@@ -93,20 +106,32 @@ class PwfPay {
     public function notify($params)
     {
 
-        ApiClient::setOptions($this->_getOptions());
+        $pwfClient = new PwfClient($this->_getOptions());
         try{
 
-            $ret = ApiClient::notify()->pay($params);
-            
-            if(!isset($ret->status) || $ret->status !== 1){
-                return false;
-            }else{
-                return [
-                    'trade_no' => $params['out_trade_no'],
-                    'callback_no' => $params['order_num'],
-                    'custom_result' => json_encode(['response'=>'ok'])
-                ];
+            $ret = $pwfClient->getApiResponse($params);
+            if($ret->isSuccess()){
+
+                if($ret->verify()){
+
+                    $data = $ret->dataMap();
+                    if(!isset($data['status']) || $data['status'] !== 1){
+                        return false;
+                    }else{
+                        return [
+                            'trade_no' => $data['out_trade_no'],
+                            'callback_no' => $data['order_num'],
+                            'custom_result' => json_encode(['response'=>'ok'])
+                        ];
+                    }
+
+                }else{
+                    throw new \Exception("驗簽失敗，請檢查Pwf平台公鑰或商戶私鑰是否配置正確。");
+                }
+                
             }
+
+            return false;
             
         }catch (\Exception $e){
             abort(500, $e->getMessage());
